@@ -1,0 +1,1103 @@
+---
+title: "Script TCC -  Previsão de Resultados de Partidas de Futebol"
+subtitle: "Modelos de Machine Learnig para Classificação"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+author: "Marcelo Ribeiro"
+output:
+  html_document:
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: true
+    code_download: true
+    code_folding: show
+    theme: default
+    number_sections: true
+    toc: yes
+    toc_float: yes
+    df_print: paged
+    fig_caption: true
+  pdf_document:
+    toc: yes
+---
+
+# Apresentação
+
+Pontifícia Universidade Católica de Minas Gerais
+Núcleo de Educação a Distância
+Pós-graduação Lato Sensu em Ciência de Dados e Big Data
+
+O presente trabalho foi desenvolvido como requisito parcial à obtenção do título de especialista do Curso de Especialização em Ciência de Dados e Big Data.
+
+## Configurações do relatório e do ambiente R e Python
+
+
+```{r Options }
+knitr::opts_chunk$set( fig.width = 10,
+                       fig.height = 10,
+                       echo=TRUE,
+                       cache=TRUE,
+                       prompt=FALSE,
+                       tidy=TRUE,
+                       message=FALSE,
+                       warning=TRUE
+)
+
+
+```
+
+```{r}
+
+# Carregar bibliotecas
+options(repos='http://cran.rstudio.com/') 
+options(max.print="75")
+gc(reset = TRUE)
+library(knitr)
+library(reticulate) # interacao com o PYTHON
+library(tidyverse) # Manipulacao de dados
+library(lattice)
+library(gridExtra)
+library(ggplot2)
+library(styler)
+library(skimr)
+opts_knit$set(width=75)
+```
+
+
+```{r} 
+# alterar o ambiente de python para um outro ambiente que contem python e R
+Sys.which("python")
+```
+
+
+```{r} 
+#use_python("C:/ProgramData/Anaconda3/envs/R/python.exe")
+```
+
+
+```{python}
+# utilizacao do python para raspagem de dados da internet
+
+import re                          # Expressao regulares
+import requests                    # Acessar paginas da internet
+from bs4 import BeautifulSoup      # Raspar elementos de paginas da internet
+import pandas as pd                # Abrir e concatenar bancos de dados
+
+```
+
+```{r}
+Sys.which("python")
+```
+
+```{r}
+# listar arquivos no diret?rio
+#os <- import("os")
+#os$listdir(".")
+```
+
+## Carregamento das bases de partidas
+
+### Partidas 2014 a 2016
+
+```{python}
+# utilizacao do python para raspagem de dados da internet
+
+def read_partidas_2014A2016(year):
+    '''
+    Definicao de uma funcao para carregar a base de dados de 2014 a 2016 que estao em formato diferente dos demais anos
+    ''' 
+    dict_of_files = {}
+    for i in year:
+
+        # URL para baixar os arquivos
+        url = 'https://github.com/henriquepgomide/caRtola/tree/master/data/{}'.format(i)
+        html = requests.get(url)
+    
+        soup = BeautifulSoup(html.text, 'lxml')
+    
+        dict = {}
+        for tag in soup.find_all('a', attrs={'href': re.compile('([0-9][0-9][0-9][0-9])_partidas_ids\.csv')}):
+            href_str = tag.get('href')
+            file_name = re.sub('/henriquepgomide/caRtola/blob/master/data/{}/'.format(i), 
+                            '', 
+                            href_str)[0:4]
+            
+            file_url = re.sub('/henriquepgomide/caRtola/blob/master/data/{}/'.format(i), 
+                            'https://raw.githubusercontent.com/henriquepgomide/caRtola/master/data/{}/'.format(i), 
+                            href_str)
+            dict[file_name] = file_url
+            dict_of_files.update(dict)
+    
+        list_of_dataframes = []
+    for key, item in dict_of_files.items():
+            names = ["ID" ,'Rodada', "CasaID", "VisitanteID", "PlacarCasa","PlacarVisitante", "Resultado"]
+            df = pd.read_csv(item, header = 0,  names = names)
+            df['ano'] = key
+            list_of_dataframes.append(df)
+    
+            df_cartola = pd.concat(list_of_dataframes)
+    
+    return df_cartola
+```
+
+
+
+```{python}
+# Leitura e consolidacao dos dados atraves da funcao criada
+
+year = (2014, 2015, 2016)
+Partidas_2014a2016 = read_partidas_2014A2016(year)
+
+```
+
+```{r}
+# trazer os resultados do python para um objeto no R
+
+Partidas_2014a2016 <- py$Partidas_2014a2016
+```
+
+```{r}
+# Verificacao dos tipos de variaveis em cada dataframe
+glimpse(Partidas_2014a2016)
+```
+
+```{r}
+
+Partidas_2014a2016 <- Partidas_2014a2016[, -7] # retirar a lista resultados
+```
+
+
+
+### Partidas 2017 a 2018
+
+```{python}
+def read_partidas_2017A2018(year):
+    
+    ''' 
+    Definicao de uma funcao para carregar a base de dados de 2017 a 2018 que estao em formato diferente dos demais anos
+    ''' 
+    dict_of_files = {}
+    for i in year:
+
+        # URL para baixar os arquivos
+        url = 'https://github.com/henriquepgomide/caRtola/tree/master/data/{}'.format(i)
+        html = requests.get(url)
+    
+        soup = BeautifulSoup(html.text, 'lxml')
+    
+        dict = {}
+        for tag in soup.find_all('a', attrs={'href': re.compile('([0-9][0-9][0-9][0-9])_partidas\.csv')}):
+            href_str = tag.get('href')
+            file_name = re.sub('/henriquepgomide/caRtola/blob/master/data/{}/'.format(i), 
+                            '', 
+                            href_str)[0:4]
+            
+            file_url = re.sub('/henriquepgomide/caRtola/blob/master/data/{}/'.format(i), 
+                            'https://raw.githubusercontent.com/henriquepgomide/caRtola/master/data/{}/'.format(i), 
+                            href_str)
+            dict[file_name] = file_url
+            dict_of_files.update(dict)
+    
+        list_of_dataframes = []
+    for key, item in dict_of_files.items():
+            df = pd.read_csv(item)
+            df['ano'] = key
+            list_of_dataframes.append(df)
+    
+            df_cartola = pd.concat(list_of_dataframes)
+    
+    return df_cartola
+```
+
+```{python}
+# Leitura e consolidacao dos dados atraves da funcao criada
+
+year = (2017, 2018)
+Partidas_2017a2018 = read_partidas_2017A2018(year)
+
+```
+
+```{r}
+# trazer os resultados do python para um objeto no R
+
+Partidas_2017a2018 <- py$Partidas_2017a2018
+```
+
+```{r}
+# tratamento da base Partidas_2017a2018 para ficar no mesmo padrao
+
+# 2. Separar dados da coluna "score"  -> nas linhas do vetor abaixo existem espaços a mais no final de cada placar e sera descartado automaticamente pela funcao separate
+
+vetor <- c(505, 552, 581, 582, 583, 588, 589, 615, 616, 675, 714, 743, 745, 746)
+
+Partidas_2017a2018[vetor, "score"]
+
+Partidas_2017a2018 <- separate(Partidas_2017a2018, score, c("home.score", "vs", "away.score"), convert = TRUE)
+```
+
+```{r}
+glimpse(Partidas_2017a2018)
+```
+
+
+```{r}
+# transformacao dos placares para valores inteiros
+
+Partidas_2017a2018$home.score <- as.integer(Partidas_2017a2018$home.score)
+Partidas_2017a2018$away.score <- as.integer(Partidas_2017a2018$away.score)
+```
+
+
+```{r}
+# Padronizacao para o formato e nomes iguais ao da base Partidas_2014a2016
+
+Partidas_2017a2018 <- Partidas_2017a2018 %>% select(ID = game, Rodada = round, CasaID = home_team, VisitanteID = away_team, PlacarCasa = home.score, PlacarVisitante = away.score, ano)
+```
+
+```{r}
+Partidas_2017a2018 <- Partidas_2017a2018 %>%
+  mutate(
+    slug_casa = case_when(
+      CasaID == "América - MG" ~ "AME",
+      CasaID == "Atlético - GO" ~ "ATL",
+      CasaID == "Atlético - MG" ~ "CAM",
+      CasaID == "Atlético - PR" ~ "CAP",
+      CasaID == "Avaí - SC" ~ "AVA",
+      CasaID == "Bahia - BA" ~ "BAH",
+      CasaID == "Botafogo - RJ" ~ "BOT",
+      CasaID == "Ceará - CE" ~ "CEA",
+      CasaID == "Chapecoense - SC" ~ "CHA",
+      CasaID == "Corinthians - SP" ~ "COR",
+      CasaID == "Coritiba - PR" ~ "CFC",
+      CasaID == "Cruzeiro - MG" ~ "CRU",
+      CasaID == "Flamengo - RJ" ~ "FLA",
+      CasaID == "Fluminense - RJ" ~ "FLU",
+      CasaID == "Grêmio - RS" ~ "GRE",
+      CasaID == "Internacional - RS" ~ "INT",
+      CasaID == "Palmeiras - SP" ~ "PAL",
+      CasaID == "Paraná - PR" ~ "PAR",
+      CasaID == "Ponte Preta - SP" ~ "PON",
+      CasaID == "Santos - SP" ~ "SAN",
+      CasaID == "São Paulo - SP" ~ "SAO",
+      CasaID == "Sport - PE" ~ "SPT",
+      CasaID == "Vasco da Gama - RJ" ~ "VAS",
+      CasaID == "Vitória - BA" ~ "VIT"
+    ),
+    slug_visitante = case_when(
+      VisitanteID == "América - MG" ~ "AME",
+      VisitanteID == "Atlético - GO" ~ "ATL",
+      VisitanteID == "Atlético - MG" ~ "CAM",
+      VisitanteID == "Atlético - PR" ~ "CAP",
+      VisitanteID == "Avaí - SC" ~ "AVA",
+      VisitanteID == "Bahia - BA" ~ "BAH",
+      VisitanteID == "Botafogo - RJ" ~ "BOT",
+      VisitanteID == "Ceará - CE" ~ "CEA",
+      VisitanteID == "Chapecoense - SC" ~ "CHA",
+      VisitanteID == "Corinthians - SP" ~ "COR",
+      VisitanteID == "Coritiba - PR" ~ "CFC",
+      VisitanteID == "Cruzeiro - MG" ~ "CRU",
+      VisitanteID == "Flamengo - RJ" ~ "FLA",
+      VisitanteID == "Fluminense - RJ" ~ "FLU",
+      VisitanteID == "Grêmio - RS" ~ "GRE",
+      VisitanteID == "Internacional - RS" ~ "INT",
+      VisitanteID == "Palmeiras - SP" ~ "PAL",
+      VisitanteID == "Paraná - PR" ~ "PAR",
+      VisitanteID == "Ponte Preta - SP" ~ "PON",
+      VisitanteID == "Santos - SP" ~ "SAN",
+      VisitanteID == "São Paulo - SP" ~ "SAO",
+      VisitanteID == "Sport - PE" ~ "SPT",
+      VisitanteID == "Vasco da Gama - RJ" ~ "VAS",
+      VisitanteID == "Vitória - BA" ~ "VIT"
+    )
+  )
+```
+
+### Partidas 2019 a 2020
+
+```{python}
+def read_partidas_2019_20(year):
+    '''
+    Definicao de uma funcao para carregar a base de dados de 2019 a 2020 que estao em formato diferente dos demais anos
+    ''' 
+    dict_of_files = {}
+    for i in year:
+
+        # URL para baixar os arquivos
+        url = 'https://github.com/henriquepgomide/caRtola/tree/master/data/{}'.format(i)
+        html = requests.get(url)
+    
+        soup = BeautifulSoup(html.text, 'lxml')
+    
+        dict = {}
+        for tag in soup.find_all('a', attrs={'href': re.compile('([0-9][0-9][0-9][0-9])_partidas\.csv')}):
+            href_str = tag.get('href')
+            file_name = re.sub('/henriquepgomide/caRtola/blob/master/data/{}/'.format(i), 
+                            '', 
+                            href_str)[0:4]
+            
+            file_url = re.sub('/henriquepgomide/caRtola/blob/master/data/{}/'.format(i), 
+                            'https://raw.githubusercontent.com/henriquepgomide/caRtola/master/data/{}/'.format(i), 
+                            href_str)
+            dict[file_name] = file_url
+            dict_of_files.update(dict)
+        list_of_dataframes = []
+    for key, item in dict_of_files.items():
+            names = ["ID" ,"CasaID", "VisitanteID", "PlacarCasa","PlacarVisitante", 'Rodada']
+            df = pd.read_csv(item, header = 0,  names = names)
+            df['ano'] = key
+            list_of_dataframes.append(df)
+            df_cartola = pd.concat(list_of_dataframes)
+    
+    return df_cartola
+
+```
+
+```{python}
+
+# Leitura e consolidacao dos dados atraves da funcao criada
+year = (2019, 2020)
+Partidas_2019a2020 = read_partidas_2019_20(year)
+```
+
+```{r}
+# trazer os resultados do python para um objeto no R
+Partidas_2019a2020 <- py$Partidas_2019a2020
+```
+
+```{r}
+# Verificacao dos tipos de variaveis em cada dataframe
+glimpse(Partidas_2019a2020)
+```
+
+
+```{r}
+# Padronizacao com as bases anteriores
+
+Partidas_2019a2020 <- Partidas_2019a2020 %>% select(ID, Rodada, CasaID, VisitanteID, PlacarCasa, PlacarVisitante, ano)
+```
+
+### Carregamento da tabela auxiliar - códigos dos clubes
+
+```{r}
+# A base de dados Partidas_2017_2018 esta com os nomes dos times e as bases dos demais anos está em codigos (id). Diante dessa situacao, busquei esses codigos em outras bases e consolidei na base cod_clubes
+
+
+X2014_clubes <- read_csv("archive/2014_clubes.csv")
+X2015_clubes <- read_csv("archive/2015_clubes.csv")
+X2016_clubes <- read_csv("archive/2016_clubes.csv")
+X2017_clubes <- read_csv("archive/2017_clubes.csv")
+
+cod_clubes <- rbind(X2014_clubes, X2015_clubes, X2016_clubes, X2017_clubes)
+
+glimpse(cod_clubes)
+```
+
+
+```{r}
+
+# Em 2020 os clubes: Ceara, CSA, Fortaleza e Bragantino, que nao estavam nas bases dos anos anteriores, foram acrescentados com seus respectivos codigos da base do ano de 2020.
+
+# em 2018 o Parana clube foi acrescentado como codigo 374, pois não foi possivel encontrar em nas demais bases.
+
+cod_clubes <- rbind(cod_clubes, data.frame(id = c(354, 341, 356, 280, 374), nome = c("Ceará", "CSA", "Fortaleza", "Bragantino", "Paraná"), abreviacao = c("CEA", "CSA", "FOR", "BRA", "PAR"), slug = c("ceara", "CSA", "fortaleza", "bragantino", "parana")))
+```
+
+
+
+
+```{r}
+# dataset completo das partidas 2014 a 2020
+
+
+Partidas_2017a2018 <- Partidas_2017a2018 %>%
+  left_join(cod_clubes, by = c("slug_casa" = "abreviacao")) %>%
+  select(ID, Rodada,
+    CasaID = id, VisitanteID,
+    PlacarCasa, PlacarVisitante, ano, slug_visitante
+  ) %>%
+  distinct(.) %>%
+  left_join(cod_clubes, by = c("slug_visitante" = "abreviacao")) %>%
+  select(ID, Rodada, CasaID, VisitanteID = id, PlacarCasa, PlacarVisitante, ano) %>%
+  distinct(.)
+
+
+
+
+Partidas <- rbind(Partidas_2014a2016, Partidas_2017a2018, Partidas_2019a2020)
+Partidas$ano <- as.numeric(Partidas$ano)
+```
+
+```{r}
+glimpse(Partidas)
+```
+
+
+
+
+## Scouts de jogadores
+
+### Carregar base de 2014 a 2017
+
+```{r}
+
+# leitura da base dos scouts de jogadores de 2014 a 2017
+
+scouts_2014_2017 <- read_csv(file = "https://raw.githubusercontent.com/henriquepgomide/caRtola/master/data/2017/2017_dados_agregados.csv")
+```
+
+```{r}
+# formato dessa base
+
+glimpse(scouts_2014_2017)
+```
+
+```{r}
+
+# selecao das variaveis para ficar no mesmo padrao dos demais anos
+
+scouts_2014_2017 <- scouts_2014_2017 %>% select(AtletaID, Apelido, Rodada, ClubeID, Posicao, Pontos, PontosMedia, Preco, PrecoVariacao, ano)
+```
+
+
+### Carregamento dos scouts 2018 a 2020
+
+```{python}
+
+def read_scouts_2018_20(year):
+    '''
+    Definicao de uma funcao para carregar as bases de dados de scouts de jogadores de 2018 a 2020 que estao em formato diferente dos demais anos
+    ''' 
+    if year in [2018, 2019, 2020]:
+
+        # URL para baixar os arquivos
+        url = 'https://github.com/henriquepgomide/caRtola/tree/master/data/{}'.format(year)
+        html = requests.get(url)
+    
+        soup = BeautifulSoup(html.text, 'lxml')
+    
+        dict_of_files = {}
+        for tag in soup.find_all('a', attrs={'href': re.compile('rodada-([0-9]|[0-9][0-9])\.csv')}):
+            href_str = tag.get('href')
+            file_name = re.sub('/henriquepgomide/caRtola/blob/master/data/{}/'.format(year), 
+                            '', 
+                            href_str)
+            
+            file_url = re.sub('/henriquepgomide/caRtola/blob/master/data/{}/'.format(year), 
+                            'https://raw.githubusercontent.com/henriquepgomide/caRtola/master/data/{}/'.format(year), 
+                            href_str)
+            dict_of_files[file_name] = file_url
+    
+        list_of_dataframes = []
+        for key, item in dict_of_files.items():
+            df = pd.read_csv(item)
+            df['rodada'] = key
+            list_of_dataframes.append(df)
+    
+        df_cartola = pd.concat(list_of_dataframes)
+    
+        return df_cartola
+    
+    else:
+        print('You need to add an year within the range: 2018 and 2020')
+        
+        
+```
+
+
+```{python}
+# Leitura e consolidacao dos dados atraves da funcao criada
+
+scouts_2018 = read_scouts_2018_20(2018)
+scouts_2019 = read_scouts_2018_20(2019)
+scouts_2020 = read_scouts_2018_20(2020)
+```
+
+
+```{r}
+# trazer os resultados do python para um objeto no R
+
+# criacao da variavel ano utilizando o mutate em cada base
+
+# a base de scouts_2018 foi a unica que veio apenas os nomes dos times
+# foi realizado um cruzamento com a base de cod_clubes para buscar o id do clube.
+
+scouts_2018 <- py$scouts_2018
+
+scouts_2018 <- scouts_2018 %>% filter(atletas.pontos_num != 0 & atletas.variacao_num != 0 & atletas.media_num != 0)
+
+
+scouts_2019 <- py$scouts_2019
+
+scouts_2019 <- scouts_2019 %>% filter(atletas.pontos_num != 0 & atletas.variacao_num != 0 & atletas.media_num != 0)
+
+
+scouts_2020 <- py$scouts_2020
+
+scouts_2020 <- scouts_2020 %>% filter(atletas.pontos_num != 0 & atletas.variacao_num != 0 & atletas.media_num != 0)
+
+```
+
+
+```{r}
+# Atletico-MG e Atletico-PR estao com mesmo id= ATL, que na base de cod_clubes e abreviacao do Atletico-GO
+
+scouts_2018 <- scouts_2018 %>%
+  mutate(clube_id = case_when(
+    atletas.clube.id.full.name == "Atlético-MG" ~ "CAM",
+    atletas.clube.id.full.name == "Atlético-PR" ~ "CAP",
+    !atletas.clube.id.full.name %in% c("Atlético-MG", "Atlético-PR") ~ atletas.clube_id
+  ), ano = 2018) %>%
+  left_join(cod_clubes, by = c("clube_id" = "abreviacao")) %>%
+  select(
+    AtletaID = atletas.atleta_id, Apelido = atletas.apelido, Rodada = atletas.rodada_id, ClubeID = id,
+    Posicao = atletas.posicao_id, Pontos = atletas.pontos_num, PontosMedia = atletas.media_num, Preco = atletas.preco_num, PrecoVariacao = atletas.variacao_num, ano
+  ) %>%
+  distinct(.)
+
+
+scouts_2019 <- scouts_2019 %>%
+  mutate(ano = 2019) %>%
+  select(
+    AtletaID = atletas.atleta_id,
+    Apelido = atletas.apelido,
+    Rodada = atletas.rodada_id,
+    ClubeID = atletas.clube_id,
+    Posicao = atletas.posicao_id,
+    Pontos = atletas.pontos_num,
+    PontosMedia = atletas.media_num,
+    Preco = atletas.preco_num,
+    PrecoVariacao = atletas.variacao_num,
+    ano
+  )
+
+scouts_2020 <- scouts_2020 %>%
+  mutate(ano = 2020) %>%
+  select(
+    AtletaID = atletas.atleta_id,
+    Apelido = atletas.apelido,
+    Rodada = atletas.rodada_id,
+    ClubeID = atletas.clube_id,
+    Posicao = atletas.posicao_id,
+    Pontos = atletas.pontos_num,
+    PontosMedia = atletas.media_num,
+    Preco = atletas.preco_num,
+    PrecoVariacao = atletas.variacao_num,
+    ano
+  )
+
+# juncao das 3 bases
+
+df_scouts_18_2020 <- rbind(scouts_2018, scouts_2019, scouts_2020)
+
+glimpse(df_scouts_18_2020)
+```
+
+```{r}
+scouts <- rbind(scouts_2014_2017, df_scouts_18_2020)
+glimpse(scouts)
+```
+
+## Processamento para o data set final
+
+```{r Processamento para o data set final}
+# somar as pontuacoes dos jogadores por area no campo a cada rodada
+# se rodada for igual, clube for igual, e statusid for de defesa, coluna def soma pontos, preco, variacao, media
+# gerar os dados de defesa,ataque e tec de cada time
+t0 <- data.frame(
+  "ano" = 0, "rodada" = 0, "clube_id" = 0, "cDefPonto" = 0, "cDefPreco" = 0, "cDefVar" = 0, "cDefMedia" = 0,
+  "cAtaPonto" = 0, "cAtaPreco" = 0, "cAtaVar" = 0, "cAtaMedia" = 0,
+  "cTecPonto" = 0, "cTecPreco" = 0, "cTecVar" = 0, "cTecMedia" = 0
+)
+for (a in 2014:2020) {
+  for (i in 1:38) {
+    for (j in 262:374) {
+      t1 <- filter(scouts, ano == a & Rodada == i & ClubeID == j & (Posicao == "gol" | Posicao == "lat" | Posicao == "zag"))
+      t2 <- filter(scouts, ano == a & Rodada == i & ClubeID == j & (Posicao == "mei" | Posicao == "ata"))
+      t3 <- filter(scouts, ano == a & Rodada == i & ClubeID == j & (Posicao == "tec"))
+      t6 <- data.frame("ano" = t1$ano[1], "rodada" = t1$Rodada[1], "clube_id" = t1$ClubeID[1], "cDefPonto" = mean(t1$Pontos), "cDefPreco" = mean(t1$Preco), "cDefVar" = mean(t1$PrecoVariacao), "cDefMedia" = mean(t1$PontosMedia), "cAtaPonto" = mean(t2$Pontos), "cAtaPreco" = mean(t2$Preco), "cAtaVar" = mean(t2$PrecoVariacao), "cAtaMedia" = mean(t2$PontosMedia), "cTecPonto" = mean(t3$Pontos), "cTecPreco" = mean(t3$Preco), "cTecVar" = mean(t3$PrecoVariacao), "cTecMedia" = mean(t3$PontosMedia))
+      t0 <- rbind(t0, t6)
+    }
+  }
+}
+teste <- filter(t0, !is.na(rodada))
+```
+
+
+```{r pegar os stats para as equipes em cada partida}
+# pegar os stats para as equipes em cada partida
+b0 <- data.frame(
+  "ano" = 0, "rodada" = 0, "clube_casa_id" = 0, "casaDef" = 0, "casaDefMedia" = 0, "casaDefPreco" = 0, "casaDefVar" = 0, "casaAtk" = 0, "casaAtkMedia" = 0, "casaAtkPreco" = 0, "casaAtkVar" = 0,
+  "casaTec" = 0, "casaTecMedia" = 0, "casaTecPreco" = 0, "casaTecVar" = 0,
+  "visitanteDef" = 0, "visitanteDefMedia" = 0, "visitanteDefPreco" = 0, "visitanteDefVar" = 0,
+  "visitanteAtk" = 0, "visitanteAtkMedia" = 0, "visitanteAtkPreco" = 0, "visitanteAtkVar" = 0,
+  "visitanteTec" = 0, "visitanteTecMedia" = 0, "visitanteTecPreco" = 0, "visitanteTecVar" = 0
+)
+for (a in 2014:2020) {
+  for (i in 1:38) {
+    b1 <- filter(Partidas, ano == a, Rodada == i) # filtro Rodada
+
+    for (j in 1:10) {
+      casa <- filter(teste, ano == a, rodada == i, clube_id == b1$CasaID[j]) # filtro time casa
+
+      visitante <- filter(teste, ano == a, rodada == i, clube_id == b1$VisitanteID[j]) # filtro time vist.
+
+      if (dim(casa)[1] == 0 || dim(visitante)[1] == 0) {
+        # b2 são as partidas que nao partiparam do cartola, B5 são as informacoes dos jogadores
+        b2 <- data.frame(
+          "ano" = NA,
+          "rodada" = NA, "clube_casa_id" = NA,
+          "casaDef" = NA,
+          "casaDefMedia" = NA,
+          "casaDefPreco" = NA, "casaDefVar" = NA,
+          "casaAtk" = NA,
+          "casaAtkMedia" = NA,
+          "casaAtkPreco" = NA, "casaAtkVar" = NA,
+          "casaTec" = NA,
+          "casaTecMedia" = NA, "casaTecPreco" = NA,
+          "casaTecVar" = NA,
+          "visitanteDef" = NA,
+          "visitanteDefMedia" = NA,
+          "visitanteDefPreco" = NA, "visitanteDefVar" = NA,
+          "visitanteAtk" = NA,
+          "visitanteAtkMedia" = NA,
+          "visitanteAtkPreco" = NA, "visitanteAtkVar" = NA,
+          "visitanteTec" = NA,
+          "visitanteTecMedia" = NA,
+          "visitanteTecPreco" = NA, "visitanteTecVar" = NA
+        )
+      } else {
+        b5 <- data.frame(
+          "ano" = b1$ano[1],
+          "rodada" = b1$Rodada[1], "clube_casa_id" = b1$CasaID[j],
+          "casaDef" = casa$cDefPonto,
+          "casaDefMedia" = casa$cDefMedia,
+          "casaDefPreco" = casa$cDefPreco, "casaDefVar" = casa$cDefVar,
+          "casaAtk" = casa$cAtaPonto,
+          "casaAtkMedia" = casa$cAtaMedia,
+          "casaAtkPreco" = casa$cAtaPreco, "casaAtkVar" = casa$cAtaVar,
+          "casaTec" = casa$cTecPonto,
+          "casaTecMedia" = casa$cTecMedia, "casaTecPreco" = casa$cTecPreco,
+          "casaTecVar" = casa$cTecVar,
+          "visitanteDef" = visitante$cDefPonto,
+          "visitanteDefMedia" = visitante$cDefMedia,
+          "visitanteDefPreco" = visitante$cDefPreco, "visitanteDefVar" = visitante$cDefVar,
+          "visitanteAtk" = visitante$cAtaPonto,
+          "visitanteAtkMedia" = visitante$cAtaMedia,
+          "visitanteAtkPreco" = visitante$cAtaPreco, "visitanteAtkVar" = visitante$cAtaVar,
+          "visitanteTec" = visitante$cTecPonto,
+          "visitanteTecMedia" = visitante$cTecMedia,
+          "visitanteTecPreco" = visitante$cTecPreco, "visitanteTecVar" = visitante$cTecVar
+        )
+      }
+      b0 <- rbind(b0, b5)
+      b0 <- b0 %>% distinct(.)
+    }
+  }
+}
+```
+
+
+```{r}
+# fazer um join com a tabela original
+datasetFinal <- merge(Partidas, b0, by.x = c("ano", "Rodada", "CasaID"), by.y = c("ano", "rodada", "clube_casa_id"))
+```
+
+
+
+## Processamento de tratamento e limpeza
+
+```{r echo=TRUE}
+sum_NA <- function(dados){
+  sum(is.na(dados))
+}
+
+# total de linhas
+n = nrow(datasetFinal)
+
+# aplicando a função em cada coluna
+round(apply(datasetFinal, 2, sum_NA)*100/n, 2)
+```
+
+```{r}
+
+# excluir os jogos que não foram realizados e nao participaram no cartola na data programada inicialmente
+# excluir os jogadores registrados pelo clube, porem nao participaram do jogo
+
+datasetFinal <- datasetFinal %>% filter(!is.na(PlacarVisitante), !is.na(casaAtk), !is.na(visitanteAtk)) 
+
+
+# total de linhas
+n = nrow(datasetFinal)
+
+# aplicando a função em cada coluna
+round(apply(datasetFinal, 2, sum_NA)*100/n, 2)
+
+```
+
+```{r}
+
+#Preencher os valores NA's dos técnicos com a média das pontuações da defesa e do ataque
+# Primeiro com o técnico do mandante
+
+for (i in 1:length(datasetFinal$casaTec)) {
+  if (is.na(datasetFinal$casaTec[i])) {
+    datasetFinal$casaTec[i] <- (datasetFinal$casaDef[i] + datasetFinal$casaAtk[i]) / 2
+    datasetFinal$casaTecMedia[i] <- (datasetFinal$casaDefMedia[i] + datasetFinal$casaAtkMedia[i]) / 2
+    datasetFinal$casaTecPreco[i] <- (datasetFinal$casaDefPreco[i] + datasetFinal$casaAtkPreco[i]) / 2
+    datasetFinal$casaTecVar[i] <- (datasetFinal$casaDefVar[i] + datasetFinal$casaAtkVar[i]) / 2
+  }
+}
+```
+
+```{r}
+# Agora com o técnico do visitiante
+
+for (i in 1:length(datasetFinal$visitanteTec)) {
+  if (is.na(datasetFinal$visitanteTec[i])) {
+    datasetFinal$visitanteTec[i] <- (datasetFinal$visitanteDef[i] + datasetFinal$visitanteAtk[i]) / 2
+    datasetFinal$visitanteTecMedia[i] <- (datasetFinal$visitanteDefMedia[i] + datasetFinal$visitanteAtkMedia[i]) / 2
+    datasetFinal$visitanteTecPreco[i] <- (datasetFinal$visitanteDefPreco[i] + datasetFinal$visitanteAtkPreco[i]) / 2
+    datasetFinal$visitanteTecVar[i] <- (datasetFinal$visitanteDefVar[i] + datasetFinal$visitanteAtkVar[i]) / 2
+  }
+}
+```
+
+
+```{r}
+
+# total de linhas
+n = nrow(datasetFinal)
+
+# aplicando a função em cada coluna
+round(apply(datasetFinal, 2, sum_NA)*100/n, 2) 
+```
+
+## Criação de novas variáveis
+
+```{r}
+# criação da variavel dependente = resultado final da partica 
+
+datasetFinal <- datasetFinal %>% mutate(
+  resultado_mandante = ifelse(PlacarCasa > PlacarVisitante, "V", ifelse(PlacarCasa == PlacarVisitante, "E", "D")),
+  resultado_visitante = ifelse(PlacarCasa > PlacarVisitante, "D", ifelse(PlacarCasa == PlacarVisitante, "E", "V")),
+  Pontos_Mandante = ifelse(resultado_mandante == "V", 3, ifelse(resultado_mandante == "E", 1, 0)),
+  Pontos_Visitante = ifelse(resultado_visitante == "V", 3, ifelse(resultado_visitante == "E", 1, 0))
+)
+```
+
+
+```{r}
+# criação das variaveis com a soma acumulada dos gols marcados, gols sofridos, saldo de gols e pontuacao
+
+datasetFinal1 <- datasetFinal %>%
+  select(ano, Rodada,
+    Time = CasaID,
+    adversario = VisitanteID,
+    Gols_marcados = PlacarCasa,
+    Gols_sofridos = PlacarVisitante,
+    Resultado_Rodada = resultado_mandante,
+    Pontos_Rodada = Pontos_Mandante
+  ) %>%
+  arrange(ano, Rodada)
+
+datasetFinal2 <- datasetFinal %>%
+  select(ano, Rodada,
+    Time = VisitanteID,
+    adversario = CasaID,
+    Gols_marcados = PlacarVisitante,
+    Gols_sofridos = PlacarCasa,
+    Resultado_Rodada = resultado_visitante,
+    Pontos_Rodada = Pontos_Visitante
+  ) %>%
+  arrange(ano, Rodada)
+
+df <- rbind(datasetFinal1, datasetFinal2)
+```
+
+```{r}
+
+
+df1 <- data.frame(
+  "ano" = NA, "Rodada" = NA, "Time" = NA, "adversario" = NA, "Gols_marcados" = NA, "Gols_sofridos" = NA, "Resultado_Rodada" = NA, "Pontos_Rodada" = NA, "GF" = NA, "GS" = NA, "SaldodeGols" = NA, "Pontuacao" = NA
+)
+for (a in 2014:2020) {
+  for (i in unique(filter(df, ano == a)[, 3])) { # buscando os ids dos times de cada ano
+
+    df0 <- df %>%
+      filter(ano == a, Time == i) %>%
+      arrange(Rodada) %>%
+      mutate(
+        GF = cumsum(Gols_marcados),
+        GS = cumsum(Gols_sofridos),
+        SaldodeGols = GF - GS,
+        Pontuacao = cumsum(Pontos_Rodada)
+      )
+
+    df1 <- rbind(df1, df0)
+  }
+}
+```
+
+
+```{r}
+
+datasetFinal <- datasetFinal %>% left_join(df1, by = c(
+  "ano" = "ano", "Rodada" = "Rodada", "CasaID" = "Time",
+  "VisitanteID" = "adversario"
+))
+```
+
+## Engenharia de atributos
+
+```{r}
+# Função para converter variáveis numéricas para fator
+quantize.num <- function(x, nlevs = 5, maxval = Inf,
+                         minval = -Inf, ordered = TRUE) {
+  cuts <- seq(min(x), max(x), length.out = nlevs + 1)
+  cuts[1] <- minval
+  cuts[nlevs + 1] <- maxval
+  print(cuts)
+  x <- cut(x, breaks = cuts, order_result = ordered)
+}
+
+
+# Transformando variáveis numéricas em variáveis categóricas
+var_numericas <- c("casaDef", "casaDefMedia", "casaDefPreco", "casaDefVar", "casaAtk", "casaAtkMedia", "casaAtkPreco", "casaAtkVar", "casaTec", "casaTecMedia", "casaTecPreco", "casaTecVar", "visitanteDef", "visitanteDefMedia", "visitanteDefPreco", "visitanteDefVar", "visitanteAtk", "visitanteAtkMedia", "visitanteAtkPreco", "visitanteAtkVar", "visitanteTec", "visitanteTecMedia", "visitanteTecPreco", "visitanteTecVar", "Gols_marcados", "Gols_sofridos", "GF", "GS", "SaldodeGols", "Pontuacao")
+
+maxVals <- c(rep(100000, length(var_numericas)))
+facNames <- unlist(lapply(var_numericas, function(x) paste(x, "_f", sep = "")))
+datasetFinal[, facNames] <- Map(function(x, y) quantize.num(datasetFinal[, x], maxval = y), var_numericas, maxVals)
+
+```
+
+Código a ser executado no AZURE em as #
+
+```{r}
+# Map 1-based optional input ports to variables
+#df <- maml.mapInputPort(1) # class: data.frame
+# Função para converter variáveis numéricas para fator
+#quantize.num <- function(x, nlevs = 5, maxval = 1000, 
+#                          minval = -1000, ordered = TRUE){
+#   cuts <- seq(min(x), max(x), length.out = nlevs + 1)
+#   cuts[1] <- minval
+#   cuts[nlevs + 1] <- maxval
+#   print(cuts)
+#   x <- cut(x, breaks = cuts, order_result = ordered)
+# }
+# 
+# 
+# 
+# # Transformando variáveis numéricas em variáveis categóricas
+# var_numericas <-  c("casaDef", "casaDefMedia", "casaDefPreco", "casaDefVar","casaAtk", "casaAtkMedia", "casaAtkPreco", "casaAtkVar", "casaTec", "casaTecMedia","casaTecPreco", "casaTecVar", "visitanteDef", "visitanteDefMedia", "visitanteDefPreco", "visitanteDefVar", "visitanteAtk", "visitanteAtkMedia", "visitanteAtkPreco", "visitanteAtkVar", "visitanteTec", "visitanteTecMedia","visitanteTecPreco", "visitanteTecVar", "Gols_marcados", "Gols_sofridos", "GF", "GS","SaldodeGols",  "Pontuacao" )
+# 
+# maxVals <- c(rep(100000,  length(var_numericas)))
+# facNames <- unlist(lapply(var_numericas, function(x) paste(x, "_f", sep = "")))
+# df[, facNames] <- Map(function(x, y) quantize.num(df[, x], maxval = y), var_numericas, maxVals)
+# 
+# 
+# # Select data.frame to be sent to the output Dataset port
+# maml.mapOutputPort("df");
+```
+
+```{r}
+datasetFinal$Resultado_Rodada <- as.factor(datasetFinal$Resultado_Rodada)
+glimpse(datasetFinal)
+```
+
+
+
+
+# Análise exploratória
+
+```{r}
+# Obtendo apenas as colunas numéricas
+
+df_numericas <- datasetFinal[,-c(1:7)]
+colunas_numericas <- sapply(df_numericas, is.numeric)
+colunas_numericas
+```
+
+
+```{r}
+# Obtendo apenas as colunas numéricas
+df_categoricas <- datasetFinal[,-c(1:7)]
+colunas_categ <- sapply(df_categoricas, is.factor)
+colunas_categ
+```
+
+
+```{r}
+var_numericas <- names(df_numericas[, colunas_numericas]) # vetor com nomes das variaveis numericas
+variaveis_catego <- names(df_categoricas[,colunas_categ][-1]) # vetor com nomes das variaveis categoricas
+```
+
+```{r}
+# Analise descritvas das variaveis numericas
+#Sys.setlocale("LC_ALL", 'en_US.UTF-8')
+
+Analise_numerica <- datasetFinal %>% 
+  dplyr::select(var_numericas) %>%
+  skimr::skim() %>%
+  dplyr::rename("Tipo da Variável" = skim_type, "Variável" = skim_variable, "nº NA" = n_missing,
+                "Média"  = numeric.mean, "DP" = numeric.sd,
+                "p0" = numeric.p0, "p25" = numeric.p25, "p50" = numeric.p50,
+                "p75" = numeric.p75,"p100" = numeric.p100,
+                "Histograma" =  numeric.hist) %>%
+  dplyr::select(-c("complete_rate", "Histograma")) %>% print.listof(locale = locale(encoding = "UTF8"))
+  
+Analise_numerica %>% knitr::kable()
+```
+
+## Gráficos
+
+```{r}
+library(corrplot)
+# Salvando os gráficos
+
+# png
+#png("corrplot.png", width = 500, height = 500, res = 72)
+
+
+data_cor <- cor(df_numericas[,colunas_numericas])
+# Criando um corrplot
+corrplot(data_cor, method = 'color')
+
+
+#dev.off()
+```
+
+
+
+```{r}
+# criação de graficos de boxplot das variaveis numericas em relacao ao resultado da rodada por ano
+
+list.Boxplot <- lapply(var_numericas[c(-25,-26,-29)], function(x) {
+  formula <- as.formula(paste0(x, " ~ Resultado_Rodada | as.factor(ano)"))
+  bwplot(formula,
+    data = datasetFinal,
+    xlab = "Resultado da Partida",
+    ylab = paste(x),
+    
+  )
+})
+
+```
+
+```{r}
+marrangeGrob(list.Boxplot, nrow=1, ncol=2)
+```
+
+
+```{r}
+# analise descritiva das variaveis categorias 
+
+summary(datasetFinal[,variaveis_catego[1:9]])%>% knitr::kable() #slice para ficar em uma unica pagina
+
+summary(datasetFinal[,variaveis_catego[10:19]])%>% knitr::kable()
+
+summary(datasetFinal[,variaveis_catego[20:30]])%>% knitr::kable()
+
+```
+
+
+```{r}
+#criacao de graficos de barras das variaveis categoricas em relacao ao resultado da rodada
+
+list_grafBarras <- lapply(variaveis_catego[-1], function(x) {
+  ggplot(datasetFinal) +
+    aes_string(x) +
+    geom_bar(fill = "#0c4c8a") +
+    labs(title = paste(x, " ~ Resultado")) +
+    theme_minimal() +
+    facet_grid(vars(Resultado_Rodada))
+  })
+ml <- marrangeGrob(list_grafBarras, nrow = 1, ncol = 2)
+ml 
+#ggsave("multipage.pdf", ml)
+```
+
+## Teste para médias
+
+```{r} 
+# anova - diferença significates entre as médias por resultado final
+
+lista <- lapply(var_numericas, function(x) {
+  formula1 <- as.formula(paste0(x, " ~ Resultado_Rodada"))
+  AnovaModel <- aov(formula = formula1, data=datasetFinal)
+  summary(AnovaModel)
+  
+})
+
+names(lista) <- var_numericas
+lista
+```
+
+
+# Teste de independência de variáveis
+
+```{r}
+
+lista1 <- lapply(variaveis_catego[-1], function(x) {
+  local({
+  formula2 <- as.formula(paste0("~", x,"+Resultado_Rodada"))
+  .Table <- xtabs(formula2, data=datasetFinal)
+  cat("\nTabela de frequência:\n")
+  print(.Table)
+  .Test <- chisq.test(.Table)
+  print(.Test)
+})
+  
+})
+
+
+
+```
+
+
+# Criação dos Modelos de Machine Learnig 
+
+Todo esse processamento foi utilizando o Microsoft Azure Machine Learning, que é um framework de Machine Learning que pode ser usado para construir modelos de análise preditiva. Nele foi possível criar 4(quatro) experimentos utilizando os modelos preditivos propostos. 
+
+##	1º experimento: 
+
+O primeiro fluxo de trabalho foi utilizando os atributos numéricos para as três classes: vitória, empate e derrota. 
+
+![Fluxo de trabalho](Fluxo_1.png)
+
+##	2º experimento: 
+
+Para este experimento foram utilizadas os atributos categorizados para verificar se houve melhora na perfomance da acurácias dos modelos. 
+
+![Fluxo de trabalho](Fluxo_2.png)
+
+
+##	3º experimento: 
+
+Neste experimento foram utilizados apenas duas classes para a resposta do modelo, venceu ou não venceu. Esta foi uma alternativa para balancear as classes, na qual o número de jogos com resultado final de vitórias representava aproximadamente 50 % dos dados.
+
+
+
+```{r} 
+# código executado no AZURE sem as #
+
+# Map 1-based optional input ports to variables
+# df <- maml.mapInputPort(1) # class: data.frame
+# 
+# df$Resultado <- ifelse(df$Resultado_Rodada == "V", "Sim", "Não")
+# 
+# 
+# maml.mapOutputPort("df");
+
+```
+
+![Fluxo de trabalho](Fluxo_3.png)
+
+##	4º experimento: 
+
+O quarto experimento foi utilizando os atributos categóricos para predizer as duas novas classes criadas. Segue o fluxo deste experimento:
+
+![Fluxo de trabalho](Fluxo_4.png)
+
+```{r}
+save.image(file = "ETL.RData")
+```
